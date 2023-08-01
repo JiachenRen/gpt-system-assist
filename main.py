@@ -103,16 +103,30 @@ def run_conversation_step(available_functions):
         if function_name not in available_functions:
             add_message(
                 {
-                    "role": "user",
+                    "role": "function",
+                    "name": function_name,
                     "content": {
                         "error": f"Function {function_name} not found"
                     },
                 }
             )
-            return
+            return finish_reason
         function_to_call = available_functions[function_name]
 
-        function_args = json.loads(response_message["function_call"]["arguments"])
+        try:
+            function_args = json.loads(response_message["function_call"]["arguments"])
+        except json.JSONDecodeError:
+            add_message(
+                {
+                    "role": "function",
+                    "name": function_name,
+                    "content": {
+                        "error": "Invalid JSON when decoding function arguments"
+                    },
+                }
+            )
+            return finish_reason
+
         function_response = function_to_call(
             command=function_args.get("command"),
         )
