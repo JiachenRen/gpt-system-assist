@@ -105,9 +105,9 @@ def run_conversation_step(available_functions):
                 {
                     "role": "function",
                     "name": function_name,
-                    "content": {
+                    "content": json.dumps({
                         "error": f"Function {function_name} not found"
-                    },
+                    }),
                 }
             )
             return finish_reason
@@ -120,9 +120,9 @@ def run_conversation_step(available_functions):
                 {
                     "role": "function",
                     "name": function_name,
-                    "content": {
+                    "content": json.dumps({
                         "error": "Invalid JSON when decoding function arguments"
-                    },
+                    }),
                 }
             )
             return finish_reason
