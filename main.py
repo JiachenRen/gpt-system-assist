@@ -4,7 +4,7 @@ import json
 
 def read_api_key():
     with open('openai_api_key.txt', 'r') as file:
-        return file.read()
+        return file.read().strip()
 
 
 openai.api_key = read_api_key()
