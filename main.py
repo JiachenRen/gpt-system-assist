@@ -1,5 +1,8 @@
 import openai
-import json
+from system_interface import SystemInterface
+from task_manager import TaskManager, Task
+from context_manager import ContextManager
+from chat_completion import chat_completion
 
 
 def read_api_key():
@@ -8,136 +11,45 @@ def read_api_key():
 
 
 openai.api_key = read_api_key()
-model_name = 'gpt-3.5-turbo-0613'
-objective = '''
-You are running in a sandboxed operation system.
-The operating system is unknown, it could be Mac, Windows, Linux, or something else.
-You have access to a function called execute_shell_command, which takes a shell command as input and returns the output of the command.
-You will determine the operating system through executing command / trial and error.
-After succeeding you will await further instructions.
-'''
-initial_msg = {"role": "user", "content": objective}
-messages: list[object] = [initial_msg]
-functions = [
-        {
-            "name": "execute_shell_command",
-            "description": "Execute shell command and return output",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "shell command to execute",
-                    },
-                },
-                "required": ["command"],
-            },
-        }
-    ]
+model_name = 'gpt-3.5-turbo-16k'
 
+task_manager = TaskManager(root_task=Task(description="""
+You are an AI running on a real computer. 
+You have full access to the system through provided functions.
+Your mission is to complete tasks given by the user.
 
-# Creates a map that maps function names to functions
-def create_function_map(functions):
-    function_map = {}
-    for function in functions:
-        function_map[function["name"]] = globals().get(function["name"])
-    return function_map
+When the current task/subtask is successfully completed, make sure to call complete_task.
+When no tasks remain besides this one, ask user for next task.
+""", name="Objective"))
 
-
-# Executes provided shell command and returns output
-def execute_shell_command(command) -> str:
-    import subprocess
-    result = subprocess.run(command, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print(f'executed: {command}')
-    print(f'result: {result.stdout if result.stdout else result.stderr}')
-    return json.dumps({"output": result.stdout, "error": result.stderr})
-
-
-# Get chat completion response from GPT
-def get_chat_completion_response(messages, functions, model):
-    response = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        functions=functions,
-        function_call="auto",
-    )
-    return response
-
-
-def get_user_input():
-    user_input = input("you: ")
-    return user_input
+context_manager = ContextManager(task_manager, max_tokens=5000)
+system_interface = SystemInterface(task_manager, context_manager)
 
 
 def start_conversation_loop():
-    available_functions = create_function_map(functions)
     while True:
-        finish_reason = run_conversation_step(available_functions)
+        finish_reason = run_conversation_step()
         if finish_reason == 'function_call':
             continue
-        user_input = get_user_input().strip()
+        user_input = system_interface.get_user_input("user: ").strip()
         if user_input == "exit":
             break
-        elif user_input:
-            add_message({"role": "user", "content": user_input})
 
 
-def add_message(message):
-    messages.append(message)
-    name = message.get("name")
-    name = f'({name})' if name else ''
-    content = message.get("content")
-    if content:
-        print(f'{message["role"]}{name}: {content}')
-
-
-def run_conversation_step(available_functions):
-    response = get_chat_completion_response(messages, functions, model_name)
+def run_conversation_step():
+    response = chat_completion.get_chat_completion_response(
+        context_manager.get_current_task_context(),
+        SystemInterface.get_functions(),
+    )
     choice = response["choices"][0]
     finish_reason = choice["finish_reason"]
     response_message = choice["message"]
-    add_message(response_message)
+    context_manager.add_message(response_message)
 
     if response_message.get("function_call"):
         function_name = response_message["function_call"]["name"]
-        if function_name not in available_functions:
-            add_message(
-                {
-                    "role": "function",
-                    "name": function_name,
-                    "content": json.dumps({
-                        "error": f"Function {function_name} not found"
-                    }),
-                }
-            )
-            return finish_reason
-        function_to_call = available_functions[function_name]
-
-        try:
-            function_args = json.loads(response_message["function_call"]["arguments"])
-        except json.JSONDecodeError:
-            add_message(
-                {
-                    "role": "function",
-                    "name": function_name,
-                    "content": json.dumps({
-                        "error": "Invalid JSON when decoding function arguments"
-                    }),
-                }
-            )
-            return finish_reason
-
-        function_response = function_to_call(
-            command=function_args.get("command"),
-        )
-
-        add_message(
-            {
-                "role": "function",
-                "name": function_name,
-                "content": function_response,
-            }
-        )
+        function_args = response_message["function_call"]["arguments"]
+        system_interface.invoke_function(function_name, function_args)
 
     return finish_reason
 
