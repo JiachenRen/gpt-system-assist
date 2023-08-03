@@ -1,21 +1,32 @@
-from task_manager import TaskManager
+from nltk.tokenize import word_tokenize
+
+import nltk
+nltk.download('punkt')
 
 
 # Manages conversation context. All message history is stored in messages list.
 # Keeps track of token size and keeps context size under the limit.
 # Only uses messages pertaining to the current task to construct context.
 class ContextManager:
-    def __init__(self, task_manager, max_tokens):
-        self.task_manager: TaskManager = task_manager
+    def __init__(self, objective, max_tokens):
+        self.objective = objective
+        self.objective_token_size = len(word_tokenize(objective))
         self.max_tokens = max_tokens
+        self.messages = []
+        self.archived_messages = []
+        self.messages_token_size = 0
 
     def add_message(self, message):
-        if not message.get("content"):
-            return
-        self.task_manager.current_task.add_message(message)
+        self.messages.append(message)
+        content = message.get("content")
+        self.messages_token_size += len(word_tokenize(content)) if content else 0
+        while self.messages_token_size + self.objective_token_size > self.max_tokens:
+            msg = self.messages.pop(0)
+            msg_token_size = len(word_tokenize(msg.get("content"))) if content else 0
+            self.messages_token_size -= msg_token_size
+            self.archived_messages.append(msg)
         name = message.get("name")
         name = f'({name})' if name else ''
-        content = message.get("content")
         if content:
             print(f'{message["role"]}{name}: {content}')
 
@@ -25,23 +36,15 @@ class ContextManager:
             "content": message
         }
 
-    def get_current_task_context(self):
-        messages = []
-        curr_task = self.task_manager.current_task
-        parents = self.task_manager.get_task_parents(curr_task)
-        for task in parents:
-            if task is curr_task:
-                for sibling in self.task_manager.get_completed_sibling_tasks():
-                    messages.append(self._user_message(sibling.ctx_desc()))
-                messages.append(self._user_message(f"Current task (Task ID {curr_task.task_id}): "))
+    def _sys_message(self, message) -> dict:
+        return {
+            "role": "system",
+            "content": message
+        }
 
-            messages.append(self._user_message(task.ctx_desc()))
+    def get_context(self):
+        ctx = [self._user_message(self.objective)]
+        ctx.extend(self.messages)
+        return ctx
 
-            if task is curr_task and task is self.task_manager.root_task:
-                for subtask in task.children:
-                    messages.append(self._user_message(subtask.ctx_desc()))
-
-            if not task.is_complete:
-                messages.extend(task.messages)
-        return messages
 

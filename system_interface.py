@@ -1,20 +1,19 @@
 import json
-from typing import Optional
-from task_manager import Task, TaskManager
+from transcription import RealTimeTranscription
 
 
 class SystemInterface:
 
-    def __init__(self, task_manager: TaskManager, context_manager):
-        self.task_manager: TaskManager = task_manager
+    def __init__(self, context_manager):
         self.context_manager = context_manager
+        self.transcriber = RealTimeTranscription()
 
     @classmethod
     def get_functions(cls):
         return [
             {
                 "name": "execute_shell_command",
-                "description": "Execute shell command and return output",
+                "description": "Use this to execute a shell command and return output",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -29,43 +28,26 @@ class SystemInterface:
                 },
             },
             {
-                "name": "add_tasks",
-                "description": "Used to keep context when breaking down a complex task. "
-                               "Leverage this function to declare your objective and "
-                               "break it down into task / subtasks.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "task_descriptions": {
-                            "type": "array",
-                            "items": {
-                                "type": "string"
-                            },
-                            "description": "list task descriptions to add",
-                        },
-                        "level": {
-                            "type": "string",
-                            "description":  "if level is 'sibling', "
-                                            "adds tasks in the same level as the current task. "
-                                            "if level is 'child', "
-                                            "adds tasks of the current task (use for sub-tasking)",
-                        }
-                    },
-                    "required": [
-                        "task_descriptions",
-                        "level"
-                    ],
-                },
-            },
-            {
-                "name": "complete_task",
-                "description": "Mark the current task/subtask as complete.",
+                "name": "exit_program",
+                "description": "Use this to exit the program",
                 "parameters": {
                     "type": "object",
                     "properties": {},
                 },
             },
         ]
+
+    def exit_program(self):
+        exit()
+
+    def listen_for_user_input(self):
+        user_input = self.transcriber.get_transcription()
+        print("")
+        self.context_manager.add_message({
+            "role": "user",
+            "content": user_input
+        })
+        return user_input
 
     def get_user_input(self, prompt: str) -> str:
         user_input = input(prompt)
@@ -93,42 +75,22 @@ class SystemInterface:
             self.__report_err(function_name, e)
             return
 
-        try:
-            fn = getattr(self, function_name)
-        except Exception as e:
-            self.__report_err(function_name, e)
-            return
+        fn = getattr(self, function_name, None)
 
-        # Check if the method exists in the class
-        if hasattr(self, function_name) and callable(fn):
-            result = fn(**function_args)
-            self.context_manager.add_message(
-                {
-                    "role": "function",
-                    "name": function_name,
-                    "content": result,
-                }
-            )
+        if fn and callable(fn):
+            try:
+                result = fn(**function_args)
+                self.context_manager.add_message(
+                    {
+                        "role": "function",
+                        "name": function_name,
+                        "content": result,
+                    }
+                )
+            except Exception as e:
+                self.__report_err(function_name, e)
         else:
             self.__report_err(function_name, Exception(f"Function {function_name} does not exist"))
-
-    def add_tasks(self, task_descriptions: list[str], level='sibling'):
-        """
-        :param level: if level is 'sibling', adds a task that is the same level as the current task
-                        if level is 'child', adds a task as a child of the current task
-        :param task_descriptions: descriptions of the tasks
-        """
-        if level == 'sibling':
-            for desc in task_descriptions:
-                self.task_manager.add_sibling_task(Task(desc))
-        elif level == 'child':
-            self.task_manager.add_subtasks([Task(desc) for desc in task_descriptions])
-
-    def complete_task(self):
-        """
-        Mark current task as complete and go to the next task
-        """
-        self.task_manager.complete_current_task()
 
     def execute_shell_command(self, command) -> str:
         """

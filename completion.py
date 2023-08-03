@@ -1,7 +1,7 @@
 import openai
 
 
-class ChatCompletion:
+class Completion:
 
     def __init__(self, model):
         self.model = model
@@ -12,6 +12,7 @@ class ChatCompletion:
             model=self.model,
             messages=messages,
             functions=functions,
+            temperature=0.5,
             function_call="auto",
         )
         return response
@@ -21,7 +22,7 @@ class ChatCompletion:
         messages = [m for m in messages]
         messages.append({
             "role": "user",
-            "content": "summarize findings very briefly"
+            "content": "summarize"
         })
         res = openai.ChatCompletion.create(
             model=self.model,
@@ -30,4 +31,4 @@ class ChatCompletion:
         return res["choices"][0]["message"]["content"]
 
 
-chat_completion = ChatCompletion("gpt-3.5-turbo-16k")
+completion = Completion("gpt-3.5-turbo-16k")

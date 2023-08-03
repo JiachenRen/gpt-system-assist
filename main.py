@@ -1,8 +1,7 @@
 import openai
 from system_interface import SystemInterface
-from task_manager import TaskManager, Task
 from context_manager import ContextManager
-from chat_completion import chat_completion
+from completion import completion
 
 
 def read_api_key():
@@ -11,19 +10,21 @@ def read_api_key():
 
 
 openai.api_key = read_api_key()
-model_name = 'gpt-3.5-turbo-16k'
 
-task_manager = TaskManager(root_task=Task(description="""
-You are an AI running on a real computer. 
-You have full access to the system through provided functions.
-Your mission is to complete tasks given by the user.
+context_manager = ContextManager(objective="""
+You are a program running on a computer with full access to everything.
+You will complete tasks given by user.
+execute_shell_command should be able to give you all the information you need.
 
-When the current task/subtask is successfully completed, make sure to call complete_task.
-When no tasks remain besides this one, ask user for next task.
-""", name="Objective"))
+Follow these steps to complete a task:
+1. Gather information.
+2. Propose a solution and execute. If failed, try a different solution.
+4. Verify success.
+5. Upon verification of success, call complete_task.
 
-context_manager = ContextManager(task_manager, max_tokens=5000)
-system_interface = SystemInterface(task_manager, context_manager)
+You will now receive tasks from user.
+""", max_tokens=14000)
+system_interface = SystemInterface(context_manager)
 
 
 def start_conversation_loop():
@@ -31,14 +32,14 @@ def start_conversation_loop():
         finish_reason = run_conversation_step()
         if finish_reason == 'function_call':
             continue
-        user_input = system_interface.get_user_input("user: ").strip()
+        user_input = system_interface.listen_for_user_input().strip()
         if user_input == "exit":
             break
 
 
 def run_conversation_step():
-    response = chat_completion.get_chat_completion_response(
-        context_manager.get_current_task_context(),
+    response = completion.get_chat_completion_response(
+        context_manager.get_context(),
         SystemInterface.get_functions(),
     )
     choice = response["choices"][0]
