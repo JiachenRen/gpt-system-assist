@@ -16,9 +16,15 @@ with open("elevenlabs_api_key.txt", "r") as f:
 
 class SpeechSynthesizer:
 
-    def __init__(self, voice_id='f983VwDGfSWLHQit66A0', max_sentences_before_summarize=5):
+    def __init__(self, voice_id='f983VwDGfSWLHQit66A0', max_sentences=5, min_synth_tokens=10):
+        """
+        :param voice_id: ID of the voice.
+        :param max_sentences: max sentences before summarization
+        :param min_synth_tokens: min tokens aggregated before sending to synthesis
+        """
         self.voice_id = voice_id
-        self.max_sentences = max_sentences_before_summarize
+        self.max_sentences = max_sentences
+        self.min_synth_tokens = min_synth_tokens
         self.max_tokens_per_sentence = 50
         self.tts_queue: Queue[str] = Queue()
         self.synth_queue: Queue[str] = Queue()
@@ -63,15 +69,23 @@ class SpeechSynthesizer:
     def start_tts(self, gpt_output):
         sentences = nltk.sent_tokenize(gpt_output)
         if len(sentences) > self.max_sentences:
-            sentences = completion.summarize({
+            summary = completion.summarize([{
                 "role": "user",
                 "content": gpt_output
-            }, prompt="describe what you have accomplished or your findings very briefly; "
+            }], prompt="describe what you have accomplished or your findings very briefly; "
                       "clarify that you can provide additional details if necessary.")
+            print("Summarized for TTS: " + summary)
+            sentences = nltk.sent_tokenize(summary)
+        buffer = ""
         for sentence in sentences:
             tokens = nltk.word_tokenize(sentence)
             if len(tokens) < self.max_tokens_per_sentence:
-                self.tts_queue.put(sentence)
+                buffer += sentence + " "
+                if len(buffer) > self.min_synth_tokens:
+                    self.tts_queue.put(buffer)
+                    buffer = ""
+
+        self.tts_queue.put(buffer)
 
         # Start the TTS thread and playback thread.
         self.tts_thread_event.set()
