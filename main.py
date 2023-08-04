@@ -2,6 +2,7 @@ import openai
 from system_interface import SystemInterface
 from context_manager import ContextManager
 from completion import completion
+from speech_synthesis import SpeechSynthesizer
 
 
 def read_api_key():
@@ -19,22 +20,23 @@ execute_shell_command should be able to give you all the information you need.
 Follow these steps to complete a task:
 1. Gather information.
 2. Propose a solution and execute. If failed, try a different solution.
-4. Verify success.
-5. Upon verification of success, call complete_task.
+3. Verify success.
 
 You will now receive tasks from user.
 """, max_tokens=14000)
 system_interface = SystemInterface(context_manager)
+speech_synthesizer = SpeechSynthesizer()
 
 
 def start_conversation_loop():
-    while True:
-        finish_reason = run_conversation_step()
-        if finish_reason == 'function_call':
-            continue
-        user_input = system_interface.listen_for_user_input().strip()
-        if user_input == "exit":
-            break
+    try:
+        while True:
+            finish_reason = run_conversation_step()
+            if finish_reason == 'function_call':
+                continue
+            system_interface.listen_for_user_input()
+    except KeyboardInterrupt:
+        exit(0)
 
 
 def run_conversation_step():
@@ -46,6 +48,9 @@ def run_conversation_step():
     finish_reason = choice["finish_reason"]
     response_message = choice["message"]
     context_manager.add_message(response_message)
+    content = response_message.get("content")
+    if content:
+        speech_synthesizer.tts_blocking(content)
 
     if response_message.get("function_call"):
         function_name = response_message["function_call"]["name"]

@@ -2,3 +2,5 @@ openai==0.27.8
 nltk~=3.8.1
 pyaudio
 SpeechRecognition
+pygame~=2.5.0
+elevenlabs~=0.2.21

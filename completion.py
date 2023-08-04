@@ -18,11 +18,11 @@ class Completion:
         return response
 
     # Summarize the task and findings from sequence of messages
-    def summarize(self, messages):
+    def summarize(self, messages, prompt="summarize briefly"):
         messages = [m for m in messages]
         messages.append({
             "role": "user",
-            "content": "summarize"
+            "content": prompt
         })
         res = openai.ChatCompletion.create(
             model=self.model,
