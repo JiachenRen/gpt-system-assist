@@ -1,14 +1,16 @@
 import time
+import pygame
+import nltk
+import io
 
 from elevenlabs import generate, set_api_key
 from typing import Optional
-import pygame
-import nltk
 from threading import Thread, Event, Lock
 from queue import Queue
-from completion import completion
+from chat_completion_interface import completion
 
-import io
+
+nltk.download('punkt')
 
 with open("elevenlabs_api_key.txt", "r") as f:
     set_api_key(f.read().strip())

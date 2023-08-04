@@ -1,7 +1,7 @@
 import openai
 from system_interface import SystemInterface
 from context_manager import ContextManager
-from completion import completion
+from chat_completion_interface import completion
 from speech_synthesis import SpeechSynthesizer
 
 
@@ -23,7 +23,7 @@ Follow these steps to complete a task:
 3. Verify success.
 
 You will now receive tasks from user.
-""", max_tokens=14000)
+""", max_tokens=14000, model_name=completion.model)
 system_interface = SystemInterface(context_manager)
 speech_synthesizer = SpeechSynthesizer()
 speech_synthesizer.init()
@@ -33,7 +33,7 @@ def start_conversation_loop():
     try:
         while True:
             finish_reason = run_conversation_step()
-            if finish_reason == 'function_call':
+            if finish_reason == 'function_call' or finish_reason == 'length':
                 continue
             system_interface.listen_for_user_input()
     except KeyboardInterrupt:

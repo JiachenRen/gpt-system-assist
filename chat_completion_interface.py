@@ -1,7 +1,7 @@
 import openai
 
 
-class Completion:
+class ChatCompletionInterface:
 
     def __init__(self, model):
         self.model = model
@@ -31,4 +31,4 @@ class Completion:
         return res["choices"][0]["message"]["content"]
 
 
-completion = Completion("gpt-3.5-turbo-16k")
+completion = ChatCompletionInterface("gpt-3.5-turbo-16k")

@@ -4,3 +4,4 @@ pyaudio
 SpeechRecognition
 pygame~=2.5.0
 elevenlabs~=0.2.21
+tiktoken~=0.3.3
