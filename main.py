@@ -1,3 +1,5 @@
+import time
+
 import openai
 from system_interface import SystemInterface
 from context_manager import ContextManager
@@ -27,12 +29,22 @@ You will now receive tasks from user.
 system_interface = SystemInterface(context_manager)
 speech_synthesizer = SpeechSynthesizer()
 speech_synthesizer.init()
+tts_summarize_long_response = False
 
 
 def start_conversation_loop():
     try:
         while True:
             finish_reason = run_conversation_step()
+            try:
+                speech_synthesizer.wait_for_completion()
+            except KeyboardInterrupt:
+                speech_synthesizer.stop_tts()
+                try:
+                    input("\nAborted TTS. Press enter to continue. ")
+                except EOFError:
+                    print("Exiting...")
+                    time.sleep(0.5)
             if finish_reason == 'function_call' or finish_reason == 'length':
                 continue
             system_interface.listen_for_user_input()
@@ -41,18 +53,53 @@ def start_conversation_loop():
 
 
 def run_conversation_step():
-    response = completion.get_chat_completion_response(
+    stream = completion.get_chat_completion_response(
         context_manager.get_context(),
         SystemInterface.get_functions(),
     )
-    choice = response["choices"][0]
-    finish_reason = choice["finish_reason"]
-    response_message = choice["message"]
-    context_manager.add_message(response_message)
-    content = response_message.get("content")
-    if content:
-        speech_synthesizer.tts_blocking(content)
 
+    def build_obj(obj, k, v):
+        if k in obj:
+            if isinstance(v, str):
+                obj[k] += v
+            else:
+                for k2, v2 in v.items():
+                    build_obj(obj[k], k2, v2)
+        else:
+            obj[k] = v
+
+    response_message = {}
+    finish_reason = None
+    printed_role = False
+
+    def consume_new_content(content):
+        nonlocal printed_role
+        if not tts_summarize_long_response:
+            speech_synthesizer.stream_tts(content)
+        role = response_message.get("role")
+        if not printed_role and role:
+            print("assistant: ", end='')
+            printed_role = True
+        print(content, end='')
+
+    for chunk in stream:
+        choice = chunk["choices"][0]
+        finish_reason = choice["finish_reason"]
+        delta = choice["delta"]
+        for key, val in delta.items():
+            build_obj(response_message, key, val)
+            if key == "content" and val:
+                consume_new_content(val)
+    print("")
+    content = response_message.get("content")
+    if tts_summarize_long_response:
+        speech_synthesizer.start_tts(content)
+    elif content:
+        speech_synthesizer.stream_tts(None)
+
+    context_manager.add_message(response_message, print_message=False)
+
+    # While TTS is playing, we can do some work
     if response_message.get("function_call"):
         function_name = response_message["function_call"]["name"]
         function_args = response_message["function_call"]["arguments"]

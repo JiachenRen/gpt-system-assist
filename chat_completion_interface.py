@@ -14,6 +14,7 @@ class ChatCompletionInterface:
             functions=functions,
             temperature=0.5,
             function_call="auto",
+            stream=True,
         )
         return response
 

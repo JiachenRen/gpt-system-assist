@@ -35,6 +35,7 @@ class SpeechSynthesizer:
         self.tts_thread_event = Event()
         self.tts_thread: Optional[Thread] = None
         self.playback_thread: Optional[Thread] = None
+        self.stream_buffer = ""
         self.lock = Lock()
 
     def init(self):
@@ -58,15 +59,47 @@ class SpeechSynthesizer:
             return (self.tts_queue.qsize() + self.playback_queue.qsize() + self.synth_queue.qsize()) > 0 \
                    or pygame.mixer.music.get_busy()
 
-    def tts_blocking(self, gpt_output):
+    def wait_for_completion(self):
         """
-        Start TTS, blocking until all playback is finished.
-        :param gpt_output: output from GPT
+        Block until all TTS and playback is finished.
         :return:
         """
-        self.start_tts(gpt_output)
         while self.is_busy():
             time.sleep(0.1)
+
+    def stream_tts(self, chunk: str | None):
+        """
+        Stream TTS as chunks of text come in.
+        :param chunk: chunk from GPT response stream, None if end of stream
+        :return:
+        """
+        if not chunk:
+            # End of stream
+            if len(self.stream_buffer) > 0:
+                self.tts_thread_event.set()
+                self.playback_thread_event.set()
+                self.tts_queue.put(self.stream_buffer)
+                self.stream_buffer = ""
+            return
+        self.stream_buffer += chunk
+        sentences = nltk.sent_tokenize(self.stream_buffer)
+        tokens = nltk.word_tokenize(self.stream_buffer)
+
+        # When at least one sentence is complete / too long, start streaming.
+        if len(sentences) > 1 or len(tokens) > self.max_tokens_per_sentence:
+            sentence_tokens = nltk.word_tokenize(sentences[0])
+            if len(sentence_tokens) > self.max_tokens_per_sentence:
+                incomplete_sent = " ".join(tokens[:self.max_tokens_per_sentence])
+                self.tts_queue.put(incomplete_sent)
+                remaining = " ".join(tokens[self.max_tokens_per_sentence:])
+                self.stream_buffer = remaining
+            else:
+                self.tts_queue.put(sentences[0])
+                self.stream_buffer = " ".join(sentences[1:])
+
+            # Begin streaming TTS if not already started.
+            self.tts_thread_event.set()
+            self.playback_thread_event.set()
 
     def start_tts(self, gpt_output):
         sentences = nltk.sent_tokenize(gpt_output)
@@ -86,6 +119,9 @@ class SpeechSynthesizer:
                 if len(buffer) > self.min_synth_tokens:
                     self.tts_queue.put(buffer)
                     buffer = ""
+            else:
+                # Todo: process sentences that are too long.
+                pass
 
         self.tts_queue.put(buffer)
 
@@ -98,10 +134,11 @@ class SpeechSynthesizer:
         Stops TTS and playback immediately, cancel pending TTS requests and pending playback tracks.
         :return:
         """
+        self.tts_queue.queue.clear()
+        self.synth_queue.queue.clear()
+        self.playback_queue.queue.clear()
         self.tts_thread_event.clear()
         self.playback_thread_event.clear()
-        self.tts_queue.queue.clear()
-        self.playback_queue.queue.clear()
         pygame.mixer.music.stop()
 
     def _playback_worker(self):

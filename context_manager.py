@@ -20,12 +20,12 @@ class ContextManager:
     def count_tokens_in_msg(self, message: dict):
         tokens = 4  # Every message follows <im_start>{role/name}\n{content}<im_end>\n
         for key, value in message.items():
-            tokens += len(self.encoding.encode(value))
+            tokens += len(self.encoding.encode(str(value)))
             if key == "name":  # If there's a name, the role is omitted
                 tokens -= 1  # Every reply is primed with <im_start>assistant
         return tokens
 
-    def add_message(self, message):
+    def add_message(self, message, print_message=True):
         self.messages.append(message)
         self.total_tokens += self.count_tokens_in_msg(message)
         while self.total_tokens + self.objective_tokens > self.max_tokens:
@@ -33,10 +33,11 @@ class ContextManager:
             msg_token_size = self.count_tokens_in_msg(msg)
             self.total_tokens -= msg_token_size
             self.archived_messages.append(msg)
+
         content = message.get("content")
         name = message.get("name")
         name = f'({name})' if name else ''
-        if content:
+        if content and print_message:
             print(f'{message["role"]}{name}: {content}')
 
     def _user_message(self, message) -> dict:
