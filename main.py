@@ -26,6 +26,7 @@ You will now receive tasks from user.
 """, max_tokens=14000)
 system_interface = SystemInterface(context_manager)
 speech_synthesizer = SpeechSynthesizer()
+speech_synthesizer.init()
 
 
 def start_conversation_loop():
@@ -36,7 +37,7 @@ def start_conversation_loop():
                 continue
             system_interface.listen_for_user_input()
     except KeyboardInterrupt:
-        exit(0)
+        system_interface.exit_program()
 
 
 def run_conversation_step():

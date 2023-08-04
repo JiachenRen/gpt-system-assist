@@ -38,7 +38,7 @@ class SystemInterface:
         ]
 
     def exit_program(self):
-        exit()
+        exit(0)
 
     def listen_for_user_input(self):
         user_input = self.transcriber.get_transcription()

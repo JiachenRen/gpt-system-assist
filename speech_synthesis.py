@@ -1,6 +1,7 @@
 import time
 
 from elevenlabs import generate, set_api_key
+from typing import Optional
 import pygame
 import nltk
 from threading import Thread, Event, Lock
@@ -24,14 +25,20 @@ class SpeechSynthesizer:
         self.playback_queue: Queue[bytes] = Queue()
         self.playback_thread_event = Event()
         self.tts_thread_event = Event()
-        self.tts_thread = Thread(target=self._tts_worker)
-        self.playback_thread = Thread(target=self._playback_worker)
-        self.tts_thread.start()
-        self.playback_thread.start()
+        self.tts_thread: Optional[Thread] = None
+        self.playback_thread: Optional[Thread] = None
         self.lock = Lock()
 
+    def init(self):
         # Initialize the mixer
         pygame.mixer.init()
+        # Initialize threads
+        self.tts_thread = Thread(target=self._tts_worker)
+        self.tts_thread.daemon = True
+        self.playback_thread = Thread(target=self._playback_worker)
+        self.playback_thread.daemon = True
+        self.tts_thread.start()
+        self.playback_thread.start()
 
     def is_busy(self):
         """
