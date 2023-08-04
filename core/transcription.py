@@ -90,7 +90,8 @@ class RealTimeTranscription:
 
                 # Read the transcription.
                 audio_file = open(self.temp_file, 'rb')
-                result = openai.Audio.transcribe("whisper-1", audio_file)
+                result = openai.Audio.transcribe(
+                    "whisper-1", audio_file, prompt="Do not hallucinate, only transcribe what you hear for certain.")
                 text = result['text'].strip()
 
                 # If we detected a pause between recordings, add a new item to our transcription.

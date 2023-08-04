@@ -3,17 +3,11 @@ import pygame
 import nltk
 import io
 
-from elevenlabs import generate, set_api_key
+from elevenlabs import generate
 from typing import Optional
 from threading import Thread, Event, Lock
 from queue import Queue
-from chat_completion_interface import completion
-
-
-nltk.download('punkt')
-
-with open("elevenlabs_api_key.txt", "r") as f:
-    set_api_key(f.read().strip())
+from .chat_completion_interface import completion
 
 
 class SpeechSynthesizer:

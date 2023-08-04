@@ -1,30 +1,28 @@
 import time
-
 import openai
-from system_interface import SystemInterface
-from context_manager import ContextManager
-from chat_completion_interface import completion
-from speech_synthesis import SpeechSynthesizer
+import nltk
 
+from core import SystemInterface, ContextManager, SpeechSynthesizer, completion
+from elevenlabs import set_api_key
 
-def read_api_key():
-    with open('openai_api_key.txt', 'r') as file:
-        return file.read().strip()
+nltk.download('punkt')
 
+with open('keys/openai_api_key.txt', 'r') as file:
+    openai.api_key = file.read().strip()
 
-openai.api_key = read_api_key()
+with open("keys/elevenlabs_api_key.txt", "r") as f:
+    set_api_key(f.read().strip())
 
-context_manager = ContextManager(objective="""
+context_manager = ContextManager(objective=f"""
 You are a program running on a computer with full access to everything.
-You will complete tasks given by user.
 execute_shell_command should be able to give you all the information you need.
 
-Follow these steps to complete a task:
+Follow these steps to solve a problem:
 1. Gather information.
 2. Propose a solution and execute. If failed, try a different solution.
 3. Verify success.
 
-You will now receive tasks from user.
+You will now receive tasks from user. Be concise in your response.
 """, max_tokens=14000, model_name=completion.model)
 system_interface = SystemInterface(context_manager)
 speech_synthesizer = SpeechSynthesizer()
@@ -91,10 +89,13 @@ def run_conversation_step():
             if key == "content" and val:
                 consume_new_content(val)
     print("")
-    content = response_message.get("content")
+
     if tts_summarize_long_response:
-        speech_synthesizer.start_tts(content)
-    elif content:
+        content = response_message.get("content")
+        if content:
+            speech_synthesizer.start_tts(content)
+    else:
+        # Stop streaming
         speech_synthesizer.stream_tts(None)
 
     context_manager.add_message(response_message, print_message=False)

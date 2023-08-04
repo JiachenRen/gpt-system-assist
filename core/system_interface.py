@@ -1,5 +1,5 @@
 import json
-from transcription import RealTimeTranscription
+from .transcription import RealTimeTranscription
 
 
 class SystemInterface:
